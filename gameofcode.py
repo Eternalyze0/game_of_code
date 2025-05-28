@@ -9,18 +9,31 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
+import matplotlib.pyplot as plt
 
 #Hyperparameters
 learning_rate = 0.0002
 gamma         = 0.98
 n_rollout     = 10
 
+class Future(nn.Module):
+	def __init__(self):
+		super(Future, self).__init__()
+		self.fc1 = nn.Linear(110, 110)
+		self.fc2 = nn.Linear(110, 2)
+	def forward(self, x):
+		x = F.relu(self.fc1(x))
+		x = self.fc2(x)
+		x = x.reshape((1,2))
+		output = F.log_softmax(x, dim=1)
+		return output
+
 class ActorCritic(nn.Module):
     def __init__(self):
         super(ActorCritic, self).__init__()
         self.data = []
         self.fc1 = nn.Linear(3,256)
-        self.fc_pi = nn.Linear(256,48)
+        self.fc_pi = nn.Linear(256,49)
         self.fc_v = nn.Linear(256,1)
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
     def pi(self, x, softmax_dim = 0):
@@ -72,7 +85,7 @@ def main():
     print_interval = 20
     score = 0.0
 
-    for n_epi in range(10000):
+    for n_epi in range(1000):
         done = False
         s, _ = env.reset()
         while not done:
@@ -101,34 +114,62 @@ class CustomEnv(gym.Env):
 		super(CustomEnv, self).__init__()
 		self.program = ""
 		self.n_iter = 0
+		self.actions = enumerate(list("abcdefghijklmnoqrstuvwxyz+=-_/{}[]():0123456789 ")+["backspace"])
+		self.options = dict((k,v) for k,v in self.actions)
+		self.codes = {v: k for k, v in self.options.items()}
+	def preprocess_program(self, program):
+		print(program)
+		# print(self.codes)
+		# print(self.options)
+		for i in range(110-len(program)):
+			program += ' '
+		program = [self.codes[x] for x in program]
+		program = np.array(program)
+		program = torch.from_numpy(program)
+		program = program.float()
+		# print(program.shape)
+		return program
 	def step(self, action):
-		actions = enumerate(list("abcdefghijklmnoqrstuvwxyz+=-_/{}[]():0123456789")+["backspace"])
+		global count, counts
+		# actions = enumerate(list("abcdefghijklmnoqrstuvwxyz+=-_/{}[]():0123456789")+["backspace"])
 		# print(len(list(actions))) # 48
 		# print(action)
-		options = dict((k,v) for k,v in actions)
-		action = options[action]
+		# options = dict((k,v) for k,v in actions)
+		action = self.options[action]
 		# print(action)
 		if len(action) == 1:
-			if action in "abcdefghijklmnoqrstuvwxyz+=-_/{}[]():0123456789":
+			if action in "abcdefghijklmnoqrstuvwxyz+=-_/{}[]():0123456789 ":
 				self.program += action
 		else:
 			if action == "backspace":
 				if len(self.program) > 0:
 					self.program = self.program[:-1]
 		print(self.program)
+		prediction = future(self.preprocess_program(self.program))
 		try:
 			exec(self.program)
 			r_e = 1
+			p_t = torch.tensor(1)
+			count += 1
 		except:
 			r_e = 0
+			p_t = torch.tensor(0)
+		counts.append(count)
+		# error_forward_model = torch.nn.functional.mse_loss(prediction, p_t, size_average=None, reduce=None, reduction="mean") # input, target
+		error_forward_model = F.nll_loss(prediction.flatten(), p_t)
+		optimizer_forward.zero_grad()
+		error_forward_model.backward()
+		r_c = error_forward_model.detach().item()
 		done = False
 		if self.n_iter > 100:
 			done = True
 		self.n_iter += 1
-		return np.ones(3), r_e, done, False, np.ones(3)
+		# return self.preprocess_program(self.program), r_e, done, False, np.ones(3)
+		return np.ones(3), r_e+0*r_c, done, False, np.ones(3)
 	def reset(self): # maybe agent can choose this action
 		self.program = ""
 		self.n_iter = 0
+		# return self.preprocess_program(self.program), np.ones(3)
 		return np.ones(3), np.ones(3)
 	def render(self, mode="human"): # is it faster if rgb_gray?
 		pass
@@ -136,7 +177,13 @@ class CustomEnv(gym.Env):
 		pass
 
 if __name__ == '__main__':
-    main()
+	count = 0
+	counts = []
+	future = Future()
+	optimizer_forward = optim.Adam(future.parameters(), lr=learning_rate)
+	main()
+	plt.plot(counts)
+	plt.savefig("counts.png")
 
 
 
