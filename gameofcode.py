@@ -12,6 +12,7 @@ from torch.distributions import Categorical
 import matplotlib.pyplot as plt
 from multiprocessing import Process
 import time
+import func_timeout
 
 #Hyperparameters
 learning_rate = 0.0002
@@ -145,7 +146,7 @@ class CustomEnv(gym.Env):
 		print('n_iter:', self.n_iter)
 		action = self.options[action]
 		print('action:', action)
-		action = "noop"
+		# action = "noop"
 		if action != "noop":
 			self.program.append(action)
 		# print('program:', self.program)
@@ -154,22 +155,13 @@ class CustomEnv(gym.Env):
 		print('program_string:', "".join(self.program))
 		t0 = time.time()
 		try:
-			# def func():
-				# return exec("".join(self.program))
-			p = Process(target=exec, args="".join(self.program), kwargs=[])
-			p.start()
-			p.join(0.1)
-			if p.poll() is None:
-				p.terminate()
-				raise Exception("ERROR")
-			# if p.is_alive():
-				# p.terminate()
-				# raise Exception("Error")
+			func_timeout.func_timeout(0.001, exec, args=["".join(self.program)])
 			r_e = 1
 			p_t = torch.tensor(1)
 			count += 1
-		except Exception as e:
-			print('exception:', e)
+		# except func_timeout.FunctionTimedOut or Exception or SyntaxError as e:
+			# print('exception:', e)
+		except:
 			r_e = 0
 			p_t = torch.tensor(0)
 		print("run time:", time.time()-t0)
