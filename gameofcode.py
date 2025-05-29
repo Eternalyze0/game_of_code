@@ -161,7 +161,8 @@ class CustomEnv(gym.Env):
 			count += 1
 		# except func_timeout.FunctionTimedOut or Exception or SyntaxError as e:
 			# print('exception:', e)
-		except:
+		except BaseException as e:
+			print(e)
 			r_e = 0
 			p_t = torch.tensor(0)
 		print("run time:", time.time()-t0)
