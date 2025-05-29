@@ -15,6 +15,10 @@ program: 66262+66626662266666621]2
 r_c: 8.40390202938579e-05
 ```
 
+## Curiosity and External Rewards Over Time
+
+![image](https://github.com/user-attachments/assets/79c91245-e33b-41e2-9ea3-ccf84542c65b)
+
 ## Number of Programs Tested Versus Number of Programs that Run (Without Curiosity)
 
 ![image](https://github.com/user-attachments/assets/6ce44d96-cb36-40d8-9632-7bfc095ebefb)
