@@ -17,6 +17,8 @@ r_c: 8.40390202938579e-05
 
 ## Curiosity and External Rewards Over Time
 
+![image](https://github.com/user-attachments/assets/85ab936a-b70e-473e-99dd-31bd97ce5f6a)
+
 ![image](https://github.com/user-attachments/assets/79c91245-e33b-41e2-9ea3-ccf84542c65b)
 
 ## Number of Programs Tested Versus Number of Programs that Run (Without Curiosity)
