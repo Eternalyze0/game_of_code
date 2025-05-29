@@ -23,8 +23,8 @@ max_program_length = 5
 class Future(nn.Module):
 	def __init__(self):
 		super(Future, self).__init__()
-		self.fc1 = nn.Linear(5, 10)
-		self.fc2 = nn.Linear(10, 2)
+		self.fc1 = nn.Linear(5, 256)
+		self.fc2 = nn.Linear(256, 2)
 	def forward(self, x):
 		x = F.relu(self.fc1(x))
 		x = self.fc2(x)
@@ -37,7 +37,7 @@ class ActorCritic(nn.Module):
         super(ActorCritic, self).__init__()
         self.data = []
         self.fc1 = nn.Linear(3,256)
-        self.fc_pi = nn.Linear(256,31)
+        self.fc_pi = nn.Linear(256,34)
         self.fc_v = nn.Linear(256,1)
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
     def pi(self, x, softmax_dim = 0):
@@ -119,7 +119,7 @@ class CustomEnv(gym.Env):
 		self.program = []
 		self.n_iter = 0
 		# self.actions = enumerate(list("abcdefghijklmnoqrstuvwxyz+=-_/{}[]():0123456789 ")+["noop"])
-		self.actions = enumerate(list("a+=-_/{}[]():0123456789 \n")+["def ", " True ", " False ", "if ", "while ", "noop"])
+		self.actions = enumerate(list("a+=-_/{}[]():,0123456789 \n")+["def ", " and ", " or ", " True ", " False ", "if ", "while ", "noop"])
 		# print('n_actions:', len(list(self.actions)))
 		self.options = dict((k,v) for k,v in self.actions)
 		print(self.options)
