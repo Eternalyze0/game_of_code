@@ -10,17 +10,20 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
 import matplotlib.pyplot as plt
+from multiprocessing import Process
+import time
 
 #Hyperparameters
 learning_rate = 0.0002
 gamma         = 0.98
 n_rollout     = 10
+max_program_length = 5
 
 class Future(nn.Module):
 	def __init__(self):
 		super(Future, self).__init__()
-		self.fc1 = nn.Linear(110, 110)
-		self.fc2 = nn.Linear(110, 2)
+		self.fc1 = nn.Linear(5, 10)
+		self.fc2 = nn.Linear(10, 2)
 	def forward(self, x):
 		x = F.relu(self.fc1(x))
 		x = self.fc2(x)
@@ -33,7 +36,7 @@ class ActorCritic(nn.Module):
         super(ActorCritic, self).__init__()
         self.data = []
         self.fc1 = nn.Linear(3,256)
-        self.fc_pi = nn.Linear(256,49)
+        self.fc_pi = nn.Linear(256,31)
         self.fc_v = nn.Linear(256,1)
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
     def pi(self, x, softmax_dim = 0):
@@ -85,7 +88,7 @@ def main():
     print_interval = 20
     score = 0.0
 
-    for n_epi in range(1000):
+    for n_epi in range(10000):
         done = False
         s, _ = env.reset()
         while not done:
@@ -112,62 +115,83 @@ def main():
 class CustomEnv(gym.Env):
 	def __init__(self):
 		super(CustomEnv, self).__init__()
-		self.program = ""
+		self.program = []
 		self.n_iter = 0
-		self.actions = enumerate(list("abcdefghijklmnoqrstuvwxyz+=-_/{}[]():0123456789 ")+["backspace"])
+		# self.actions = enumerate(list("abcdefghijklmnoqrstuvwxyz+=-_/{}[]():0123456789 ")+["noop"])
+		self.actions = enumerate(list("a+=-_/{}[]():0123456789 \n")+["def ", " True ", " False ", "if ", "while ", "noop"])
+		# print('n_actions:', len(list(self.actions)))
 		self.options = dict((k,v) for k,v in self.actions)
+		print(self.options)
 		self.codes = {v: k for k, v in self.options.items()}
 	def preprocess_program(self, program):
-		print(program)
+		# print(program)
 		# print(self.codes)
 		# print(self.options)
-		for i in range(110-len(program)):
+		for i in range(max_program_length-len(program)):
 			program += ' '
 		program = [self.codes[x] for x in program]
 		program = np.array(program)
 		program = torch.from_numpy(program)
 		program = program.float()
 		# print(program.shape)
+		print("processed program:", program)
 		return program
 	def step(self, action):
-		global count, counts
+		global count, counts, r_cs, r_es
 		# actions = enumerate(list("abcdefghijklmnoqrstuvwxyz+=-_/{}[]():0123456789")+["backspace"])
 		# print(len(list(actions))) # 48
 		# print(action)
 		# options = dict((k,v) for k,v in actions)
+		print('n_iter:', self.n_iter)
 		action = self.options[action]
-		# print(action)
-		if len(action) == 1:
-			if action in "abcdefghijklmnoqrstuvwxyz+=-_/{}[]():0123456789 ":
-				self.program += action
-		else:
-			if action == "backspace":
-				if len(self.program) > 0:
-					self.program = self.program[:-1]
-		print(self.program)
-		prediction = future(self.preprocess_program(self.program))
+		print('action:', action)
+		action = "noop"
+		if action != "noop":
+			self.program.append(action)
+		# print('program:', self.program)
+		prediction = future(self.preprocess_program(self.program.copy()))
+		print('program:', self.program)
+		print('program_string:', "".join(self.program))
+		t0 = time.time()
 		try:
-			exec(self.program)
+			# def func():
+				# return exec("".join(self.program))
+			p = Process(target=exec, args="".join(self.program), kwargs=[])
+			p.start()
+			p.join(0.1)
+			if p.poll() is None:
+				p.terminate()
+				raise Exception("ERROR")
+			# if p.is_alive():
+				# p.terminate()
+				# raise Exception("Error")
 			r_e = 1
 			p_t = torch.tensor(1)
 			count += 1
-		except:
+		except Exception as e:
+			print('exception:', e)
 			r_e = 0
 			p_t = torch.tensor(0)
+		print("run time:", time.time()-t0)
+		# exit()
 		counts.append(count)
 		# error_forward_model = torch.nn.functional.mse_loss(prediction, p_t, size_average=None, reduce=None, reduction="mean") # input, target
 		error_forward_model = F.nll_loss(prediction.flatten(), p_t)
 		optimizer_forward.zero_grad()
 		error_forward_model.backward()
 		r_c = error_forward_model.detach().item()
+		print('r_c:', r_c)
+		print('r_e:', r_e)
+		r_cs.append(r_c)
+		r_es.append(r_e)
 		done = False
-		if self.n_iter > 100:
+		if self.n_iter == max_program_length-1:
 			done = True
 		self.n_iter += 1
 		# return self.preprocess_program(self.program), r_e, done, False, np.ones(3)
-		return np.ones(3), r_e+0*r_c, done, False, np.ones(3)
+		return np.ones(3), r_e+r_c, done, False, np.ones(3)
 	def reset(self): # maybe agent can choose this action
-		self.program = ""
+		self.program = [] #['while ', ' True ', ':', ' True ']
 		self.n_iter = 0
 		# return self.preprocess_program(self.program), np.ones(3)
 		return np.ones(3), np.ones(3)
@@ -179,10 +203,14 @@ class CustomEnv(gym.Env):
 if __name__ == '__main__':
 	count = 0
 	counts = []
+	r_cs = []
+	r_es = []
 	future = Future()
 	optimizer_forward = optim.Adam(future.parameters(), lr=learning_rate)
 	main()
-	plt.plot(counts)
+	plt.plot(r_cs, label='r_cs')
+	plt.plot(r_es, label='r_es')
+	plt.legend()
 	plt.savefig("counts.png")
 
 
